@@ -32,7 +32,7 @@ Bacteria Bouncer automates the transition from noisy 16-bit raw data to publicat
 
 | 1. Input (Raw Frame) | 2. Processed (Engine View) | 3. Output (Data Plot) |
 | :--- | :---: | :--- |
-| ![Raw Input](sample/sample_input.tif) | ![Processing Step](sample/processed.png) | ![Growth Plot](sample/mask_C12_03_1_1_Bright%20Field_019.png) |
+| ![Raw Input](sample/sample_input.tif) | ![Processing Step](sample/sample_processed.png) | ![Growth Plot](sample/sample_output.png) |
 | *16-bit Raw TIF* | *Blur & Thresholding* | *Area Quantification* |
 
 ### Pipeline Breakdown:
