@@ -57,7 +57,7 @@ Running the program:
 
 - Option 1: Running the Script
 
-    Run the ```bacteria_bouncer_gui.py``` directly using Python
+    Run ```bacteria_bouncer_gui.py``` directly using Python
 
 - Option 2: Creating a Standalone App
 
