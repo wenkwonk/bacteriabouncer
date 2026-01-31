@@ -13,7 +13,7 @@ flowchart TD
     User((User)) -->|Set Params| GUI[App Interface]
     GUI -->|Distribute Tasks| Pool[Multi-Core Process Pool]
     
-    subgraph Analysis_Engine [Worker Processing Steps]
+    subgraph Analysis_Engine [Processing]
         Pool --> Worker[Individual Worker]
         Worker --> Step1[Load 16-bit Raw Data]
         Step1 --> Step2[Apply Circular ROI Crop]
@@ -23,7 +23,7 @@ flowchart TD
     end
     
     Step5 -->|Area Calculation| GUI
-    GUI -->|Final Plots & CSV| User
+    GUI -->|Final Plots & Masks| User
 ```
 
 ## 📦Installation
