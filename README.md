@@ -26,6 +26,22 @@ flowchart TD
     GUI -->|Final Plots & Masks| User
 ```
 
+## 🔬 Analysis Pipeline
+
+This example demonstrates the transition from raw microscopy data to the final quantified growth curve.
+
+| 1. Input (Raw Frame) | 2. Processing (Engine) | 3. Output (Data Plot) |
+| :--- | :---: | :--- |
+| ![Raw Input](C12_03_1_1_Bright%20Field_019.tif) | ⚙️ <br> **Dynamic <br> Sensitivity <br> Engine** | ![Growth Plot](mask_C12_03_1_1_Bright%20Field_019.png) |
+| *16-bit Raw TIF* | *Noise Reduction & Thresholding* | *Biomass Quantification* |
+
+### Pipeline Breakdown:
+1. **Input:** The raw 16-bit `.tif` frame is loaded. The engine handles the low contrast and high noise levels typical of bright-field imaging.
+2. **Processing:** - **Gaussian Blur:** Smooths background noise.
+   - **Dynamic Thresholding:** Automatically calculates sensitivity based on per-frame standard deviation.
+   - **ROI Crop:** Removes well-edge artifacts.
+3. **Output:** The final quantification is exported as a high-resolution plot, showing the calculated biomass area or growth coverage over the duration of the experiment.
+
 ## 📦Installation
 
 Downloading the program:
@@ -46,7 +62,8 @@ Running the program:
     Run the ```bacteria_bouncer_gui.py``` directly using Python
 
 - Option 2: Creating a Standalone App
-For MacOS(.app):
+
+    For MacOS(.app):
     ```
     pyinstaller --noconsole --onefile --add-data "icon.icns:." --icon=icon.icns bacteria_bouncer_gui.py
     ```
