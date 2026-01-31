@@ -28,20 +28,17 @@ flowchart TD
 
 ## 🔬 Analysis Pipeline
 
-This example demonstrates the transition from raw microscopy data to the final quantified growth curve.
+Bacteria Bouncer automates the transition from noisy 16-bit raw data to publication-ready growth metrics.
 
-| 1. Input (Raw Frame) | 2. Processing (Engine) | 3. Output (Data Plot) |
+| 1. Input (Raw Frame) | 2. Processed (Engine View) | 3. Output (Data Plot) |
 | :--- | :---: | :--- |
-| ![Raw Input](C12_03_1_1_Bright%20Field_019.tif) | ⚙️ <br> **Dynamic <br> Sensitivity <br> Engine** | ![Growth Plot](mask_C12_03_1_1_Bright%20Field_019.png) |
-| *16-bit Raw TIF* | *Noise Reduction & Thresholding* | *Biomass Quantification* |
+| ![Raw Input](sample/sample_input.tif) | ![Processing Step](sample/processed.png) | ![Growth Plot](sample/mask_C12_03_1_1_Bright%20Field_019.png) |
+| *16-bit Raw TIF* | *Blur & Thresholding* | *Area Quantification* |
 
 ### Pipeline Breakdown:
-1. **Input:** The raw 16-bit `.tif` frame is loaded. The engine handles the low contrast and high noise levels typical of bright-field imaging.
-2. **Processing:** - **Gaussian Blur:** Smooths background noise.
-   - **Dynamic Thresholding:** Automatically calculates sensitivity based on per-frame standard deviation.
-   - **ROI Crop:** Removes well-edge artifacts.
-3. **Output:** The final quantification is exported as a high-resolution plot, showing the calculated biomass area or growth coverage over the duration of the experiment.
-
+1. **Input:** The raw 16-bit `.tif` frame is loaded. The engine is optimized for the low contrast and high-dynamic range of bright-field microscopy.
+2. **Processed:** The **Dynamic Sensitivity Engine** applies a Gaussian blur to smooth noise and calculates a per-frame threshold. This "engine view" demonstrates how the software isolates candidate biomass from the background.
+3. **Output:** The final result is exported as a high-resolution plot showing bacterial coverage over time, allowing for rapid comparison between experimental conditions.
 ## 📦Installation
 
 Downloading the program:
