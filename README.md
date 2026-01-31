@@ -31,14 +31,15 @@ flowchart TD
 Bacteria Bouncer automates the transition from noisy 16-bit raw data to publication-ready growth metrics.
 
 | 1. Input (Raw Frame) | 2. Processed (Engine View) | 3. Output (Data Plot) |
-| :--- | :---: | :--- |
-| ![Raw Input](sample/sample_input.tif) | ![Processing Step](sample/sample_processed.png) | ![Growth Plot](sample/sample_output.png) |
-| *16-bit Raw TIF* | *Blur & Thresholding* | *Area Quantification* |
+| :---: | :---: | :---: |
+| <img src="sample/sample_input.png" width="300"> | <img src="sample/sample_processed.png" width="300"> | <img src="sample/sample_output.png" width="300"> |
+| *16-bit Raw Data* | *Blur & Thresholding* | *Area Quantification* |
 
 ### Pipeline Breakdown:
-1. **Input:** The raw 16-bit `.tif` frame is loaded. The engine is optimized for the low contrast and high-dynamic range of bright-field microscopy.
-2. **Processed:** The **Dynamic Sensitivity Engine** applies a Gaussian blur to smooth noise and calculates a per-frame threshold. This "engine view" demonstrates how the software isolates candidate biomass from the background.
+1. **Input:** The raw 16-bit frame is loaded. The engine is optimized for the low contrast and high-dynamic range typical of bright-field microscopy.
+2. **Processed:** The **Dynamic Sensitivity Engine** applies a Gaussian blur to smooth noise and calculates a per-frame threshold. This view demonstrates how the software isolates candidate biomass from the background.
 3. **Output:** The final result is exported as a high-resolution plot showing bacterial coverage over time, allowing for rapid comparison between experimental conditions.
+
 ## 📦Installation
 
 Downloading the program:
