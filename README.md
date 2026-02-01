@@ -3,6 +3,7 @@
 Bacteria Bouncer is a high-throughput image analysis pipeline designed to quantify bacterial biomass and growth coverage from 16-bit TIF microscopy frames. It features a robust dynamic thresholding engine that adapts to fluctuating image noise and a multi-threaded GUI for rapid processing.
 
 ## 📋Features
+- Metadata Analysis: Reads stage coordinates from metadata to align frames and compensate for stage drift before processing
 - Dynamic Sensitivity Engine: Thresholds are automatically calculated per-frame based on the standard deviation and median values of image noise.
 - Dynamic Junk Masking: Decays junk masking in inverse relation to pixel community support and per-frame standard deviation
 - Parallel Processing: Uses a ProcessPoolExecutor to distribute well analysis across CPU cores for faster results.
@@ -14,17 +15,15 @@ flowchart TD
     User((User)) -->|Set Params| GUI[App Interface]
     GUI -->|Distribute Tasks| Pool[Multi-Core Process Pool]
     
-    subgraph Analysis_Engine [Processing]
-        Pool --> Worker[Individual Worker]
-        Worker --> Step1[Load 16-bit Raw Data]
-        Step1 --> Step2[Apply Circular ROI Crop]
-        Step2 --> Step3[Gaussian Blur & Noise Reduction]
-        Step3 --> Step4[Calculate Per-Frame Threshold]
-        Step4 --> Step5[Subtract Baseline Junk Mask]
+    subgraph Analysis_Engine [Bacteria Bouncer Engine v1.1]
+        Pool --> Worker[Worker Thread]
+        Worker --> Step1["Pre-processing<br/>Load, Align & Crop"]
+        Step1 --> Step2["Biomass Detection<br/>Blur & Dynamic Threshold"]
+        Step2 --> Step3["Artifact Filtering<br/>Community-Based Mask Decay"]
     end
     
-    Step5 -->|Area Calculation| GUI
-    GUI -->|Final Plots & Masks| User
+    Step3 -->|Calculated Area| GUI
+    GUI -->|Final Plots| User
 ```
 
 ## 🔬 Analysis Pipeline
