@@ -1,9 +1,10 @@
-# 🦠Bacteria Bouncer v1.0
+# 🦠Bacteria Bouncer v1.1
 
 Bacteria Bouncer is a high-throughput image analysis pipeline designed to quantify bacterial biomass and growth coverage from 16-bit TIF microscopy frames. It features a robust dynamic thresholding engine that adapts to fluctuating image noise and a multi-threaded GUI for rapid processing.
 
 ## 📋Features
 - Dynamic Sensitivity Engine: Thresholds are automatically calculated per-frame based on the standard deviation and median values of image noise.
+- Dynamic Junk Masking: Decays junk masking in inverse relation to pixel community support and per-frame standard deviation
 - Parallel Processing: Uses a ProcessPoolExecutor to distribute well analysis across CPU cores for faster results.
 - Customizable Parameters: Real-time adjustment of Blur kernel, Crop radius, and Sensitivity via the GUI.
 
