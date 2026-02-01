@@ -2,11 +2,13 @@ import cv2
 import numpy as np
 import os
 import time
+import re
 import matplotlib
-matplotlib.use('TkAgg') #prevents plot hangs on macOS
+matplotlib.use('TkAgg') 
 import matplotlib.pyplot as plt
 from concurrent.futures import ProcessPoolExecutor
 import bacteria_bouncer_config as config
+import tifffile
 
 #shared resources for parallel processing
 progress_counter = None
@@ -22,10 +24,40 @@ def init_worker(counter, t_ref, k_size, c_crop, s_buffer, s_mult):
     config.safety_buffer = s_buffer 
     config.std_dev_multiplier = s_mult
 
-def get_high_detail_coverage(file_path):
+def read_metadata(file_path):
+    #extracts stage coords for alignment
+    x, y, px = 0.0, 0.0, 1.22
+    try:
+        with tifffile.TiffFile(file_path) as tif:
+            desc = str(tif.pages[0].tags['ImageDescription'].value)
+            xm = re.search(r'(?:StageXPosition|StageX|PositionX)[^0-9\-\.]*([\-\d\.]+)', desc, re.I)
+            ym = re.search(r'(?:StageYPosition|StageY|PositionY)[^0-9\-\.]*([\-\d\.]+)', desc, re.I)
+            if xm: x = float(xm.group(1))
+            if ym: y = float(ym.group(1))
+    except: pass
+    return x, y, px
+
+def shift_image(img, sx, sy):
+    #corrects stage drift
+    if sx == 0 and sy == 0: return img
+    rows, cols = img.shape
+    M = np.float32([[1, 0, sx], [0, 1, sy]])
+    return cv2.warpAffine(img, M, (cols, rows), borderMode=cv2.BORDER_REFLECT)
+
+def calculate_opacity(curr_std, ref_std):
+    #inverse sigmoid opacity logic
+    if ref_std == 0: return 0.0
+    ratio = curr_std / ref_std
+    opacity = 1.0 / (1.0 + np.exp(3.0 * (ratio - 1.2))) #slope=3.0, mid=1.2
+    return np.clip(opacity, 0.0, 1.0)
+
+def get_high_detail_coverage(file_path, shift_x=0, shift_y=0):
     #loading 16-bit TIF
     img = cv2.imread(file_path, cv2.IMREAD_UNCHANGED)
-    if img is None: return 0.0, None
+    if img is None: return 0.0, None, 0.0
+
+    #aligning image
+    img = shift_image(img, -shift_x, -shift_y)
 
     #applying circular crop
     height, width = img.shape[:2]
@@ -60,7 +92,7 @@ def get_high_detail_coverage(file_path):
         bio_pixels += area
             
     coverage = (bio_pixels / mask.size) * 100
-    return round(coverage, 3), filtered_mask
+    return round(coverage, 3), filtered_mask, std_dev
 
 def process_manual_well(well_id, file_list, save_masks, output_dir):
     #worker function to process specific file lists
@@ -69,27 +101,55 @@ def process_manual_well(well_id, file_list, save_masks, output_dir):
         mask_dir = os.path.join(output_dir, f"masks_{well_id}")
         os.makedirs(mask_dir, exist_ok=True)
         
-    #getting junk mask from first frame
-    _, initial_junk_mask = get_high_detail_coverage(file_list[0])
+    #getting junk mask from first frame & baseline noise
+    anchor_x, anchor_y, scale = read_metadata(file_list[0])
+    _, raw_junk, ref_std = get_high_detail_coverage(file_list[0])
+    
+    #initializing junk health (start at 2.0 frames)
+    kernel = np.ones((5,5), np.uint8)
+    initial_junk_mask = cv2.dilate(raw_junk, kernel, iterations=1)
+    junk_health = initial_junk_mask.astype(np.float32) / 255.0 * 2.0
     
     for idx, path in enumerate(file_list):
-        raw_coverage, current_mask = get_high_detail_coverage(path)
+        #calculate stage shift
+        curr_x, curr_y, _ = read_metadata(path)
+        sx = int((curr_x - anchor_x) / scale)
+        sy = int((curr_y - anchor_y) / scale)
+
+        raw_coverage, current_mask, curr_std = get_high_detail_coverage(path, sx, sy)
+        final_mask = current_mask.copy()
         
         if idx == 0:
             well_data.append(0.0)
+            final_mask = np.zeros_like(final_mask)
         else:
-            #inversing junk mask potency with std_dev of the frame
-            active_junk = cv2.bitwise_and(initial_junk_mask, current_mask)
-            junk_count = np.count_nonzero(active_junk)
+            junk_health -= 1.0 #decay everyone
             
-            #junk adjusted growth calculation
-            actual_pixels = np.count_nonzero(current_mask) - junk_count
-            adjusted_coverage = (actual_pixels / current_mask.size) * 100
+            #checking active zones
+            active_zones = (junk_health > 0)
+            direct_hits = cv2.bitwise_and(current_mask, current_mask, mask=active_zones.astype(np.uint8))
+            
+            #gaussian spread to check junk mask pixel cummunity support
+            if np.count_nonzero(direct_hits) > 0:
+                community_support = cv2.GaussianBlur(direct_hits, (11, 11), 0)
+                junk_health[community_support > 0] = 2.0 #reset health for supported pixels
+            
+            junk_health = np.clip(junk_health, 0.0, 2.0)
+            dynamic_junk_mask = (junk_health > 0).astype(np.uint8) * 255
+            
+            opacity = calculate_opacity(curr_std, ref_std)
+            if opacity > 0.1:
+                active_junk = cv2.bitwise_and(dynamic_junk_mask, final_mask)
+                final_mask = cv2.bitwise_and(final_mask, cv2.bitwise_not(active_junk))
+            
+            #count final pixels
+            actual_pixels = np.count_nonzero(final_mask)
+            adjusted_coverage = (actual_pixels / final_mask.size) * 100
             well_data.append(round(max(0, adjusted_coverage), 3))
         
-        if save_masks and current_mask is not None and output_dir:
+        if save_masks and final_mask is not None and output_dir:
             base_name = os.path.basename(path).split('.')[0]
-            cv2.imwrite(os.path.join(mask_dir, f"mask_{base_name}.png"), current_mask)
+            cv2.imwrite(os.path.join(mask_dir, f"mask_{base_name}.png"), final_mask)
     
     with progress_counter.get_lock():
         progress_counter.value += 1
