@@ -13,12 +13,14 @@ import tifffile
 #shared resources for parallel processing
 progress_counter = None
 start_time_ref = None
+cancel_flag = None
 
-def init_worker(counter, t_ref, k_size, c_crop, s_buffer, s_mult):
+def init_worker(counter, t_ref, cancel_event, k_size, c_crop, s_buffer, s_mult):
     #initializes shared memory and syncs GUI settings to workers
-    global progress_counter, start_time_ref
+    global progress_counter, start_time_ref, cancel_flag
     progress_counter = counter
     start_time_ref = t_ref
+    cancel_flag = cancel_event
     config.gaussian_kernel_size = k_size
     config.crop_radius_ratio = c_crop
     config.safety_buffer = s_buffer 
@@ -54,10 +56,11 @@ def calculate_opacity(curr_std, ref_std):
 def get_high_detail_coverage(file_path, shift_x=0, shift_y=0):
     #loading 16-bit TIF
     img = cv2.imread(file_path, cv2.IMREAD_UNCHANGED)
-    if img is None: return 0.0, None, 0.0
+    if img is None: return 0.0, None, 0.0, None
 
     #aligning image
     img = shift_image(img, -shift_x, -shift_y)
+    raw_for_overlay = img.copy()
 
     #applying circular crop
     height, width = img.shape[:2]
@@ -76,7 +79,14 @@ def get_high_detail_coverage(file_path, shift_x=0, shift_y=0):
     std_dev = np.std(blur)
     
     #dynamic thresholding logic strictly tied to std_dev
-    dynamic_sensitivity = max(std_dev * config.std_dev_multiplier, config.safety_buffer)
+    calc_sens = std_dev * config.std_dev_multiplier
+    if calc_sens > config.safety_buffer:
+        dynamic_sensitivity = calc_sens
+        print(f"[{os.path.basename(file_path)}] Using StdDev: {dynamic_sensitivity:.4f}")
+    else:
+        dynamic_sensitivity = config.safety_buffer
+        print(f"[{os.path.basename(file_path)}] Using Safety Buffer: {dynamic_sensitivity}")
+
     dynamic_thresh = median_val - dynamic_sensitivity
     mask = (blur < dynamic_thresh).astype(np.uint8) * 255
 
@@ -92,10 +102,13 @@ def get_high_detail_coverage(file_path, shift_x=0, shift_y=0):
         bio_pixels += area
             
     coverage = (bio_pixels / mask.size) * 100
-    return round(coverage, 3), filtered_mask, std_dev
+    return round(coverage, 3), filtered_mask, std_dev, raw_for_overlay
 
 def process_manual_well(well_id, file_list, save_masks, output_dir):
     #worker function to process specific file lists
+    if cancel_flag is not None and cancel_flag.is_set():
+        return None
+
     well_data = []
     if save_masks and output_dir:
         mask_dir = os.path.join(output_dir, f"masks_{well_id}")
@@ -103,7 +116,7 @@ def process_manual_well(well_id, file_list, save_masks, output_dir):
         
     #getting junk mask from first frame & baseline noise
     anchor_x, anchor_y, scale = read_metadata(file_list[0])
-    _, raw_junk, ref_std = get_high_detail_coverage(file_list[0])
+    _, raw_junk, ref_std, _ = get_high_detail_coverage(file_list[0])
     
     #initializing junk health (start at 2.0 frames)
     kernel = np.ones((5,5), np.uint8)
@@ -111,12 +124,16 @@ def process_manual_well(well_id, file_list, save_masks, output_dir):
     junk_health = initial_junk_mask.astype(np.float32) / 255.0 * 2.0
     
     for idx, path in enumerate(file_list):
+        #stopping worker when gui requests abort
+        if cancel_flag is not None and cancel_flag.is_set():
+            return None
+
         #calculate stage shift
         curr_x, curr_y, _ = read_metadata(path)
         sx = int((curr_x - anchor_x) / scale)
         sy = int((curr_y - anchor_y) / scale)
 
-        raw_coverage, current_mask, curr_std = get_high_detail_coverage(path, sx, sy)
+        raw_coverage, current_mask, curr_std, raw_img = get_high_detail_coverage(path, sx, sy)
         final_mask = current_mask.copy()
         
         if idx == 0:
@@ -148,14 +165,19 @@ def process_manual_well(well_id, file_list, save_masks, output_dir):
             well_data.append(round(max(0, adjusted_coverage), 3))
         
         if save_masks and final_mask is not None and output_dir:
+            #normalizing 16-bit to 8-bit for display and applying color overlay
+            norm_img = cv2.normalize(raw_img, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+            overlay = cv2.cvtColor(norm_img, cv2.COLOR_GRAY2BGR)
+            overlay[final_mask == 255] = [0, 255, 0] #tinting detections green
+            
             base_name = os.path.basename(path).split('.')[0]
-            cv2.imwrite(os.path.join(mask_dir, f"mask_{base_name}.png"), final_mask)
+            cv2.imwrite(os.path.join(mask_dir, f"overlay_{base_name}.png"), overlay)
     
     with progress_counter.get_lock():
         progress_counter.value += 1
     return well_id, well_data
 
-def run_full_analysis(experiment_data, save_masks, output_dir, update_callback, k_size, c_crop, s_buffer, s_mult):
+def run_full_analysis(experiment_data, save_masks, output_dir, update_callback, is_cancelled, k_size, c_crop, s_buffer, s_mult):
     #runs parallel workers
     import multiprocessing
     #sync local process config
@@ -170,29 +192,40 @@ def run_full_analysis(experiment_data, save_masks, output_dir, update_callback, 
             tasks.append((f"{strain}_{well_id}", files, save_masks, output_dir))
             
     total = len(tasks)
-    if total == 0: return {}, 0
+    if total == 0: return {}, 0, False
     
     counter = multiprocessing.Value('i', 0)
     start_time = multiprocessing.Value('d', time.time())
+    cancel_event = multiprocessing.Event()
+    aborted = False
     
     workers = max(1, os.cpu_count() - 1)
     with ProcessPoolExecutor(max_workers=workers, initializer=init_worker, 
-                             initargs=(counter, start_time, k_size, c_crop, s_buffer, s_mult)) as executor:
+                             initargs=(counter, start_time, cancel_event, k_size, c_crop, s_buffer, s_mult)) as executor:
         futures = [executor.submit(process_manual_well, t[0], t[1], t[2], t[3]) for t in tasks]
-        while any(f.running() for f in futures):
+        while not all(f.done() for f in futures):
+            if is_cancelled():
+                cancel_event.set()
+                aborted = True
             update_callback(counter.value, total, start_time.value)
             time.sleep(0.5)
-        results = [f.result() for f in futures]
+        results = [f.result() for f in futures if not f.cancelled()]
+
+    if aborted:
+        return None, int(time.time() - start_time.value), True
 
     grouped = {}
-    for task_id, well_results in results:
+    for result in results:
+        if result is None:
+            continue
+        task_id, well_results = result
         strain = task_id.split('_')[0]
         if strain not in grouped:
             grouped[strain] = [[] for _ in range(len(well_results))]
         for hr, val in enumerate(well_results):
             grouped[strain][hr].append(val)
             
-    return grouped, int(time.time() - start_time.value)
+    return grouped, int(time.time() - start_time.value), False
 
 def show_interactive_plot(strain_data):
     #generates plot
