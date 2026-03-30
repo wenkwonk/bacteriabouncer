@@ -2,14 +2,14 @@
 
 Bacteria Bouncer is a high-throughput image analysis pipeline designed to quantify bacterial biomass and growth coverage from 16-bit TIF microscopy frames. It features a robust dynamic thresholding engine that adapts to fluctuating image noise and a multi-threaded GUI for rapid processing.
 
-## 📋Features
+## 📋 Features
 - Metadata Analysis: Reads stage coordinates from metadata to align frames and compensate for stage drift before processing
 - Dynamic Sensitivity Engine: Thresholds are automatically calculated per-frame based on the standard deviation and median values of image noise.
 - Dynamic Junk Masking: Decays junk masking in inverse relation to pixel community support and per-frame standard deviation
 - Parallel Processing: Uses a ProcessPoolExecutor to distribute well analysis across CPU cores for faster results.
 - Customizable Parameters: Real-time adjustment of Blur kernel, Crop radius, and Sensitivity via the GUI.
 
-## ⚒️Architecture
+## ⚒️ Architecture
 ```mermaid
 flowchart TD
     User((User)) -->|Set Params| GUI[App Interface]
@@ -39,6 +39,11 @@ Bacteria Bouncer automates the transition from noisy 16-bit raw data to publicat
 1. **Input:** The raw 16-bit frame is loaded. The engine is optimized for the low contrast and high-dynamic range typical of bright-field microscopy.
 2. **Processed:** The **Dynamic Sensitivity Engine** applies a Gaussian blur to smooth noise and calculates a per-frame threshold. This view demonstrates how the software isolates candidate biomass from the background.
 3. **Output:** The final result is exported as a high-resolution plot showing bacterial coverage over time, allowing for rapid comparison between experimental conditions.
+
+## ⏱️ To Do
+1. Save/load setup JSON. Smoothen high-throughput user experience.
+2. Pre-run summary, i.e sneak peek at a few frames before processing.
+3. Processing optimization. Reduce memory overhead, target sub-2min full plate times.
 
 ## 📦Installation
 
