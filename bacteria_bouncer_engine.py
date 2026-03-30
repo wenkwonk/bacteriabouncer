@@ -227,7 +227,7 @@ def run_full_analysis(experiment_data, save_masks, output_dir, update_callback, 
             
     return grouped, int(time.time() - start_time.value), False
 
-def show_interactive_plot(strain_data):
+def show_interactive_plot(strain_data, baseline_strain=None):
     #generates plot
     plt.style.use('default') 
     fig, ax = plt.subplots(figsize=(9, 9))
@@ -237,8 +237,8 @@ def show_interactive_plot(strain_data):
     sorted_strains = sorted(strain_data.keys())
     if not sorted_strains: return
     
-    #calculate normalization factor from first strain baseline
-    baseline_id = sorted_strains[0]
+    #calculate normalization factor from selected baseline
+    baseline_id = baseline_strain if baseline_strain in strain_data else sorted_strains[0]
     baseline_raw_avgs = [np.mean(h) for h in strain_data[baseline_id]]
     baseline_peak = max(baseline_raw_avgs) if baseline_raw_avgs else 0
 
